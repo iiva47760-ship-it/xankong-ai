@@ -197,6 +197,44 @@ async def stripe_webhook(request: Request):
         raise HTTPException(400, str(e))
 
 
+
+
+# ── Trend Intelligence Routes ─────────────────────────────────
+from trend_engine import trend_engine as _te
+
+@app.get("/v1/trends")
+async def get_trends(refresh: bool = False, x_api_key: str = None):
+    user = get_user(x_api_key or "")
+    data = await _te.get(force=refresh)
+    if user["plan"] == "free":
+        return {"status": "success", "plan": "free",
+                "hot_topics": data.get("hot_topics", [])[:3],
+                "updated_at": data.get("updated_at"),
+                "upgrade_msg": "Upgrade to Pro for full AI insights + crypto trends",
+                "upgrade_url": "/checkout/pro"}
+    return {"status": "success", "plan": user["plan"], **data}
+
+@app.get("/v1/trends/crypto")
+async def crypto_trends():
+    data = await _te.get()
+    return {"status": "success", "trending": data.get("crypto_trending", []), "updated_at": data.get("updated_at")}
+
+@app.get("/v1/trends/insights")
+async def ai_insights(x_api_key: str = None):
+    user = get_user(x_api_key or "")
+    if user["plan"] == "free":
+        raise HTTPException(403, "AI insights require Pro plan. Upgrade at /checkout/pro")
+    data = await _te.get()
+    return {"status": "success", "insights": data.get("ai_insights"), "updated_at": data.get("updated_at")}
+
+@app.post("/v1/trends/refresh")
+async def refresh_trends(x_api_key: str = None):
+    user = get_user(x_api_key or "")
+    if user["plan"] == "free":
+        raise HTTPException(403, "Manual refresh requires Pro plan")
+    data = await _te.get(force=True)
+    return {"status": "refreshed", "updated_at": data.get("updated_at")}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", os.environ.get("API_PORT", "8888")))
