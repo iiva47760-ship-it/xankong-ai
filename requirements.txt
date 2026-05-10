@@ -13,3 +13,5 @@ tenacity==8.2.3
 pyjwt>=2.12.1
 psutil==5.9.6
 yfinance==0.2.32
+
+stripe==7.12.0

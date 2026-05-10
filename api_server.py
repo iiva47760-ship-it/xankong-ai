@@ -140,6 +140,63 @@ async def ws_chat(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
 
+
+
+# ── Stripe Checkout ──────────────────────────────────────────
+@app.get("/checkout/{plan}")
+async def checkout(plan: str, request: Request):
+    import os
+    base = str(request.base_url).rstrip("/")
+    stripe_key = os.getenv("STRIPE_SECRET_KEY", "")
+    if not stripe_key:
+        return HTMLResponse("""<html><body style='font-family:sans-serif;background:#0a0a0f;color:#fff;padding:40px;text-align:center'>
+<h2 style='color:#a78bfa'>Stripe Setup Required</h2>
+<p style='color:#888;margin:16px 0'>Add STRIPE_SECRET_KEY to Railway environment variables</p>
+<a href='/' style='color:#667eea'>Back to Home</a></body></html>""")
+    try:
+        import stripe
+        stripe.api_key = stripe_key
+        prices = {"pro": os.getenv("STRIPE_PRICE_PRO",""), "business": os.getenv("STRIPE_PRICE_BUSINESS","")}
+        if plan not in prices or not prices[plan]:
+            raise HTTPException(400, f"Plan {plan} price not configured in Railway env vars")
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{"price": prices[plan], "quantity": 1}],
+            mode="subscription",
+            success_url=base + "/success?plan=" + plan,
+            cancel_url=base + "/#pricing",
+        )
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(session.url)
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.get("/success")
+async def success(plan: str = "pro"):
+    return HTMLResponse(f"""<html><body style='font-family:sans-serif;background:#0a0a0f;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;text-align:center'>
+<div style='font-size:4em;margin-bottom:20px'>🎉</div>
+<h1 style='color:#a78bfa'>Payment Successful!</h1>
+<p style='color:#888;margin:16px 0 32px'>Welcome to XanKong AI {plan.title()} plan!</p>
+<a href='/app' style='padding:14px 32px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:10px;text-decoration:none;font-weight:700'>Open Dashboard</a>
+</body></html>""")
+
+@app.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    import os, stripe
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    if not secret:
+        return {"status": "webhook_not_configured"}
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, secret)
+        if event["type"] == "checkout.session.completed":
+            logger.info(f"Payment completed!")
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", os.environ.get("API_PORT", "8888")))
