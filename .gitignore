@@ -1,0 +1,12 @@
+.env
+.env.*
+__pycache__/
+*.pyc
+*.pyo
+logs/
+data/
+.cache/
+node_modules/
+.DS_Store
+profiles.json
+users.txt
