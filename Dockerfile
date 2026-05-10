@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+ARG CACHE_BUST=1
 COPY . .
 
 RUN mkdir -p logs
