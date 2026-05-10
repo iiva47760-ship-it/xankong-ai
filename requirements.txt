@@ -15,3 +15,5 @@ psutil==5.9.6
 yfinance==0.2.32
 
 stripe==7.12.0
+
+# trend-engine-v3
